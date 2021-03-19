@@ -69,8 +69,19 @@ unsigned int vao;	   // virtual world on the GPU
 const int g_Points = 50;
 const int g_Links = 61;
 const float g_IdealDistance = 0.5f;
-const float g_Vectorlength = 0.01f;
+const float g_Vectorlength = 0.5f;
 const float g_Friction = 0.1;
+// higheris lower less (steeper)
+const float g_StrengthOfAffection = 6; //6  works just fine with 50,61 graph
+//higher is bigger (steeper)
+const float g_StrengthOfRepulsion = 10; //55
+
+
+//working numbers:
+/*
+	6 , 10
+
+*/
 
 float lorentz(vec3 p, vec3 q) {
 	return p.x * q.x + p.y * q.y - p.z * q.z;
@@ -142,12 +153,23 @@ struct velocity {
 
 
 float affection(float d) {
-	return powf(2.0f, d - 3.0f - g_IdealDistance) - 0.125f;
+
+	
+	d= powf(2.0f, d - g_StrengthOfAffection - g_IdealDistance) - powf(2, -g_StrengthOfAffection);
+	/*	if (d < 0.004) {
+			return 5;
+		}*/
+	return d;
 
 }
 
 float repulsion(float d) {
-	return 55.0f * powf(d - g_IdealDistance, 2.0f);
+	/*if (d == 0) {
+		return 0;
+	}
+
+	return 1.0f / (g_StrengthOfRepulsion * d) - 1.0f / (g_StrengthOfRepulsion - g_IdealDistance);*/
+	return g_StrengthOfRepulsion * powf(d - g_IdealDistance, 2.0f);
 
 }
 //vecolcity based functions
@@ -180,7 +202,7 @@ velocity hVector(vec3 p, vec3 q, bool neighbour) {
 	if (d > 0.0f) {
 		//TESZT--------------------------------------------------------------------------------
 		d = affection(d);
-		 v = velocity(coshf(d), nv * sinhf(d));
+		v = velocity(coshf(d), nv * sinhf(d));
 	}else {
 		//vec3 h = hHalfWay(p, q);
 		vec3 qstroke = hMirrorpt(q, p, 2.0f);
@@ -217,7 +239,7 @@ velocity hMirrorvt(vec3 p, vec3 q, float t) {
 float strengthOfGravityFormula(float d) {
 	//return d;
 	//return powf(2.0f, 2.f * (d - 3.0f));
-	return 0.00001f * d * d;
+	return 0.0001f * d * d;
 	//return -1 / ((d - 4.0f) * (d - 4.0f) * (d - 4.0f) * (d - 4.0f));
 }
 
