@@ -85,11 +85,27 @@ const char* const fragmentTextureSource = R"(
 	out vec4 outColor;		// computed color of the current pixel
 
 	vec4 color(vec2 uv){
-		return vec4( 1, 0, 0, 1);
+		float x = 0;
+		float y = 0;
+		float z = 0;
+		for(int i = 0; i < 9; i++){
+			if(uv.x > i){
+				x += 0.125;
+			}else if(uv.y > i){
+				y += 0.125;
+			}
+			if(i%2 == 0 && uv.x > i){
+				z=0;
+			}else if(i%2 == 1 && uv.x > i){
+				z=1;
+			}
+		}
+
+		return vec4( x, y, z, 1);
 	}
 
 	void main() {
-		outColor = vec4( 1, 0, 0, 1);//color(texCoord);
+		outColor = color(texCoord);
 	}
 )";
 
@@ -645,7 +661,7 @@ public:
 		unsigned int vbo[2];		// vertex buffer object
 		glGenBuffers(2, &vbo[0]);	// Generate 1 buffer
 		
-		float j = 0.0f;
+		float j = 1.0f;
 		float k = 0.0f;
 
 		for (Point* p : m_Points) {
@@ -663,8 +679,8 @@ public:
 				vUV.push_back(k + sinf(fi));
 			}
 			j += 1.0f;
-			if (j == 8.0f) {
-				j = 0.0f;
+			if (j == 7.0f) {
+				j = 1.0f;
 				k += 1.0f;
 			}
 		glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
@@ -734,27 +750,36 @@ public:
 	}
 
 	void drawPoints() {
+		gpuProgram[0].Use();
 		int location = glGetUniformLocation(gpuProgram[0].getId(), "color");
-		glUniform3f(location, 0.0f, 1.0f, 0.0f); // 3 floats
-
-		std::vector<float> v;
-		getCoordinates(&v);  
-		
-
-		glBufferData(GL_ARRAY_BUFFER, 	// Copy to GPU target
-			v.size() * sizeof(float),  // # bytes
-			&v[0],	      	// address
-			GL_DYNAMIC_DRAW);	// we do not change later
+		glUniform3f(location, 0.70f, 0.70f, 0.70f); // 3 floats
 
 		
-		glPointSize(10.0f);
-		glBindVertexArray(vao[0]);  // Draw call
-		glDrawArrays(GL_POINTS, 0 /*startIdx*/, g_Points /*# Elements*/);
+		for (Point* p : m_Points) {
+			std::vector<float> v;
+
+
+			for (int i = 0; i < 20; i++) {
+				float fi = (i * 2 * M_PI / 20) + M_PI / 4.0f;
+				float x = p->m_Coordinates.x + 0.045f * cosf(fi);
+				float y = p->m_Coordinates.y + 0.045f * sinf(fi);
+				float z = sqrtf(x * x + y * y + 1.0f);
+				v.push_back(x / z);
+				v.push_back(y / z);
+			}
+			glBufferData(GL_ARRAY_BUFFER, 	// Copy to GPU target
+				v.size() * sizeof(float),  // # bytes
+				&v[0],	      	// address
+				GL_DYNAMIC_DRAW);	// we do not change later
+
+			glBindVertexArray(vao[0]);  // Draw call
+			glDrawArrays(GL_TRIANGLE_FAN, 0 /*startIdx*/, 20 /*# Elements*/);
+		}
 	}
 
 	void gDraw() {
 		drawLinks();
-		//drawPoints();
+		drawPoints();
 		drawTexture(0.04f, 4);
 	}
 
