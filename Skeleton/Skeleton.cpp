@@ -66,10 +66,10 @@ unsigned int vao;	   // virtual world on the GPU
 /// ---------------------------------------------------------------------------------------------
 //new bases
 
-const int g_Points = 50;
-const int g_Links = 61;
+const int g_Points = 51; //50;
+const int g_Links = 61; //61;
 const float g_IdealDistance = 0.5f;
-const float g_Vectorlength = 0.5f;
+const float g_Vectorlength = 0.2f;
 const float g_Friction = 0.1;
 // higheris lower less (steeper)
 const float g_StrengthOfAffection = 6; //6  works just fine with 50,61 graph
@@ -131,6 +131,7 @@ struct point {
 		x = X;
 		y = Y;
 	}
+	point() {}
 
 };
 
@@ -149,7 +150,48 @@ struct velocity {
 	velocity operator+(const velocity& vel) const { return velocity(cosd * vel.cosd, v + vel.v); }
 };
 
+struct line {
+	float m;
+	float b;
+	float p;
+	float q;
+	line(float x1, float y1, float x2, float y2) {
+		if (x1 != x2) {
+			if (x1 > x2) {
+				m = (y1 - y2) / (x1 - x2);
+				p = x1;
+				q = x2;
+			}
+			else {
+				m = (y2 - y1) / (x2 - x1);
+				p = x2;
+				q = x1;
+			}
+		}
+		else {
+			//kikötés ha x1 - x2 = 0
+			m = 999999999.0f;
+			p = x1;
+			q = x2;
+		}
+		b = y1 - (m * x1);
+	}
 
+};
+
+bool intersect(line s, line t){
+	if (t.m == s.m) {
+		return false;
+	}
+	float x = (s.b - t.b) / (t.m - s.m);
+	if (s.p -0.0000001f > x && x > s.q + 0.0000001f && t.p - 0.0000001f > x && x > t.q + 0.0000001f) {
+		return true;
+	}
+	else {
+		return false;
+	}
+
+}
 
 
 float affection(float d) {
@@ -319,16 +361,23 @@ public:
 		m_Coordinates = vec3(v.x, v.y, z);
 	}
 
-
+	bool isNeighbour(Point* p) {
+		for (Point* point : m_Neighbours) {
+			if (point == p) {
+				return true;
+			}
+		}
+		return false;
+	}
 
 
 	void forceOfOthers(Point* point) {
-		bool neighbour = false;
-		for (Point* p : m_Neighbours) {
+		bool neighbour = isNeighbour(point);//false;
+		/*for (Point* p : m_Neighbours) {
 			if (p == point) {
 				neighbour = true;
 			}
-		}
+		}*/
 		setVelocity(hVector(m_Coordinates, point->m_Coordinates, neighbour));
 		
 	}
@@ -342,7 +391,7 @@ public:
 	}
 
 	void hVprint() {
-		printf("\n c : %f , v : %f\t %f\t %f\t \n", m_Velocity.cosd, m_Velocity.v.x, m_Velocity.v.y, m_Velocity.v.z);
+		//printf("\n c : %f , v : %f\t %f\t %f\t \n", m_Velocity.cosd, m_Velocity.v.x, m_Velocity.v.y, m_Velocity.v.z);
 	}
 
 	void homogeneousPrint() {
@@ -376,6 +425,17 @@ public:
 		//printf("\n c : %f , v : %f\t %f\t %f\t \n", m_Velocity.cosd, m_Velocity.v.x, m_Velocity.v.y, m_Velocity.v.z);
 	}
 
+	vec2 centerOfMass(Point* p) {
+		vec3 r = homogeneousCoordinates();
+		if (isNeighbour(p)) {
+			return vec2(r.x, r.y);
+		}
+		else {
+		return vec2(-r.x, -r.y);
+		}
+
+	}
+
 };
 
 class Graph2 {
@@ -384,44 +444,107 @@ public:
 	std::vector<int> m_Links;
 
 	void init(int numberOfPoints, int numberOfLinks) {
+		srand(2);
 		for (int i = 0; i < numberOfPoints; i++) {
 			float x = ((float)(rand() % 1000) - 500.0f) / 500.0f;
 			float y = ((float)(rand() % 1000) - 500.0f) / 500.0f;
-			
+
 			m_Points.push_back(new Point(x, y));
 		}
-
-			for (int j = 0; j < numberOfLinks; j++) {
-				bool hasItAlready = false;
-				int x = rand() % numberOfPoints;
-				int y = rand() % numberOfPoints;
-				if (x != y) {
-					for (int i = 0; i < m_Links.size() / 2; i++) {
-						if (m_Links[i * 2] == x) {
-							if (m_Links[i * 2 + 1] == y) {
-								hasItAlready = true;
-							}
-						}
-						if (m_Links[i * 2] == y) {
-							if (m_Links[i * 2 + 1] == x) {
-								hasItAlready = true;
-							}
+		srand(3);
+		for (int j = 0; j < numberOfLinks; j++) {
+			bool hasItAlready = false;
+			int x = rand() % numberOfPoints;
+			int y = rand() % numberOfPoints;
+			if (x != y) {
+				for (int i = 0; i < m_Links.size() / 2; i++) {
+					if (m_Links[i * 2] == x) {
+						if (m_Links[i * 2 + 1] == y) {
+							hasItAlready = true;
 						}
 					}
-					if (hasItAlready) {
-						j--;
-					}
-					else {
-						m_Links.push_back(x);
-						m_Links.push_back(y);
-						m_Points[x]->addNeighbour(m_Points[y]);
-						m_Points[y]->addNeighbour(m_Points[x]);
+					if (m_Links[i * 2] == y) {
+						if (m_Links[i * 2 + 1] == x) {
+							hasItAlready = true;
+						}
 					}
 				}
-				else { 
+				if (hasItAlready) {
 					j--;
 				}
+				else {
+					m_Links.push_back(x);
+					m_Links.push_back(y);
+					m_Points[x]->addNeighbour(m_Points[y]);
+					m_Points[y]->addNeighbour(m_Points[x]);
+				}
 			}
+			else {
+				j--;
+			}
+		}
+		heuristicPlacement();
+	}
+
+	void heuristicPlacement(){
+		if (g_Points > 5) {
+			//sort(); Nem segít
+			for (int i = 0; i < 5; i++) {
+				float x = ((float)(rand() % 1000) - 500.0f) / 1000.0f;
+				float y = ((float)(rand() % 1000) - 500.0f) / 1000.0f;
+				delete m_Points[i];
+				m_Points[i]= new Point(x, y);
+			}
+
+			for (int i = 5; i < g_Points; i++) {
+				vec2 sum = vec2(0.0f, 0.0f);
+				for (int j = i; j >= 0; j--) {
+					sum = sum + m_Points[j]->centerOfMass(m_Points[i]);
+				}
+				//azért szabad mert újraszámolom a zt szóval az sosem lesz 1 remálhetõleg
+				m_Points[i]->setC(vec3(sum.x, sum.y, 1.0f));
+			}
+		
+		}
+
+	}
+
+	int countIntersects() {
+		int intersects = 0;
+		std::vector<line> lines;
+		vec3 p;
+		vec3 q;
+		for (int i = 0; i < m_Links.size() / 2; i++) {
+			p = m_Points[m_Links[2 * i]]->homogeneousCoordinates();
+			q = m_Points[m_Links[2 * i + 1]]->homogeneousCoordinates();
+			lines.push_back(line(q.x, q.y, p.x, p.y));
+		}
+		for (int i = 0; i < lines.size(); i++) {
+			for (int j = i; j >= 0; j--) {
+				if (lines[i].m != lines[j].m) {
+					if (intersect(lines[i], lines[j])) {
+						intersects++;
+					}
+				}
+
+			}
+		}
+		return intersects;
+	}
+
+	void sort() {
+		for (int i = 0; i < g_Points; i++) {
+			int maxn = i;
+			for (int j = i; j < g_Points; j++) {
+				if (m_Points[j]->m_Neighbours.size() > m_Points[maxn]->m_Neighbours.size()) {
+					maxn = j;
+				}
+			}
+			Point* temp = m_Points[i];
+			m_Points[i] = m_Points[maxn];
+			m_Points[maxn] = temp;
+		}
+	
 	}
 
 	std::vector<float>* getCoordinates(std::vector<float>* v) {
@@ -504,7 +627,7 @@ public:
 		glUniform3f(location, 0.0f, 1.0f, 0.0f); // 3 floats
 
 		std::vector<float> v;
-		getCoordinates(&v);
+		getCoordinates(&v);  
 		
 
 		glBufferData(GL_ARRAY_BUFFER, 	// Copy to GPU target
@@ -551,6 +674,7 @@ Graph2 graph;
 
 // Initialization, create an OpenGL context
 void onInitialization() {
+	
 	glViewport(0, 0, windowWidth, windowHeight);
 
 	glGenVertexArrays(1, &vao);	// get 1 vao id
@@ -561,11 +685,11 @@ void onInitialization() {
 	glBindBuffer(GL_ARRAY_BUFFER, vbo);
 	graph.init(g_Points, g_Links);
 
-	vec3 p = vec3(0.0f, 0.0f, 1.0f);
+	/*vec3 p = vec3(0.0f, 0.0f, 1.0f);
 	vec3 p1 = vec3(0.1f, 0.01f, 1.00995f);
 	vec3 p2 = vec3(-5.0f, 5.0f, 7.141428f);
 
-	printf("d1 : %f , d2 : %f", hDistance(p, p1), hDistance(p, p2));
+	printf("d1 : %f , d2 : %f", hDistance(p, p1), hDistance(p, p2));*/
 	/*
 	// Geometry with 24 bytes (6 floats or 3 x 2 coordinates)
 	float vertices[] = { -0.8f, -0.8f, -0.6f, 1.0f, 0.8f, -0.2f };
@@ -613,6 +737,8 @@ void onDisplay() {
 void onKeyboard(unsigned char key, int pX, int pY) {
 	if (key == 'd') glutPostRedisplay();         // if d, invalidate display, i.e. redraw
 	if (key == 'a') { graph.sumVelocity(); glutPostRedisplay();}
+	if (key == 's') { graph.heuristicPlacement(); glutPostRedisplay(); }
+	if (key == 'c') { printf("Intersects : %d\n", graph.countIntersects()); }
 }
 
 // Key of ASCII code released
