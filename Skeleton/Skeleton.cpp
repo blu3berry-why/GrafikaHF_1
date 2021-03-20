@@ -60,8 +60,41 @@ const char * const fragmentSource = R"(
 	}
 )";
 
-GPUProgram gpuProgram; // vertex and fragment shaders
-unsigned int vao;	   // virtual world on the GPU
+const char* const vertexTextureSource = R"(	
+	#version 330				// Shader 3.3
+	precision highp float;		// normal floats, makes no difference on desktop computers
+
+	uniform mat4 MVP;			// uniform variable, the Model-View-Projection transformation matrix
+	layout(location = 0) in vec2 vp;	// Varying input: vp = vertex position is expected in attrib array 0
+	layout(location = 1) in vec2 vUV;	// Attrib array 1
+
+	out vec2 texCoord;		//output
+
+	void main() {
+		texCoord = vUV;		//copy texture coordinates
+		gl_Position = vec4(vp.x, vp.y, 0, 1) * MVP;		// transform vp from modeling space to normalized device space
+	}
+
+)";
+
+const char* const fragmentTextureSource = R"(
+	#version 330			// Shader 3.3
+	precision highp float;	// normal floats, makes no difference on desktop computers
+	
+	in vec2 texCoord;
+	out vec4 outColor;		// computed color of the current pixel
+
+	vec4 color(vec2 uv){
+		return vec4( 1, 0, 0, 1);
+	}
+
+	void main() {
+		outColor = vec4( 1, 0, 0, 1);//color(texCoord);
+	}
+)";
+
+GPUProgram gpuProgram[2]; // vertex and fragment shaders
+unsigned int vao[2];	   // virtual world on the GPU
 
 /// ---------------------------------------------------------------------------------------------
 //new bases
@@ -147,7 +180,8 @@ struct velocity {
 		cosd = 1.0f;
 		v = vec3(0, 0, 0);
 	}
-	velocity operator+(const velocity& vel) const { return velocity(cosd * vel.cosd, v + vel.v); }
+	//elõtte
+	velocity operator+(const velocity& vel) const { return velocity(cosd * vel.cosd, v * vel.cosd/*ezzel pluszban szorzom*/ + vel.v); }
 };
 
 struct line {
@@ -602,11 +636,88 @@ public:
 
 
 	// OpenGL stuff ---------------------------------------------------------------
+	void drawTexture(float r, int smoothness) {
+		gpuProgram[1].Use();
+
+		glGenVertexArrays(1, &vao[1]);	// get 1 vao id
+		glBindVertexArray(vao[1]);		// make it active
+
+		unsigned int vbo[2];		// vertex buffer object
+		glGenBuffers(2, &vbo[0]);	// Generate 1 buffer
+		
+		float j = 0.0f;
+		float k = 0.0f;
+
+		for (Point* p : m_Points) {
+			std::vector<float> v;
+			std::vector<float> vUV;
+			
+			for (int i = 0; i < smoothness; i++) {
+				float fi = (i * 2 * M_PI / smoothness) + M_PI / 4.0f;
+				float x = p->m_Coordinates.x + r * cosf(fi);
+				float y = p->m_Coordinates.y + r * sinf(fi);
+				float z = sqrtf(x * x + y * y + 1.0f);
+				v.push_back(x / z);
+				v.push_back(y / z);
+				vUV.push_back(j + cosf(fi));
+				vUV.push_back(k + sinf(fi));
+			}
+			j += 1.0f;
+			if (j == 8.0f) {
+				j = 0.0f;
+				k += 1.0f;
+			}
+		glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
+
+		float MVPtransf[4][4] = { 1, 0, 0, 0,    // MVP matrix, 
+						  0, 1, 0, 0,    // row-major!
+						  0, 0, 1, 0,
+						  0, 0, 0, 1 };
+
+		int location = glGetUniformLocation(gpuProgram[0].getId(), "MVP");	// Get the GPU location of uniform variable MVP
+		glUniformMatrix4fv(location, 1, GL_TRUE, &MVPtransf[0][0]);	// Load a 4x4 row-major float matrix to the specified location
+
+		glBufferData(GL_ARRAY_BUFFER, 
+			v.size() * sizeof(float), &v[0], GL_DYNAMIC_DRAW);
+		glEnableVertexAttribArray(0);  
+		glVertexAttribPointer(0,  2, GL_FLOAT, GL_FALSE, 0, NULL);
+		
+
+		glBindBuffer(GL_ARRAY_BUFFER, vbo[1]);
+		glBufferData(GL_ARRAY_BUFFER, vUV.size() * sizeof(float), &vUV[0], GL_STATIC_DRAW);	
+		glEnableVertexAttribArray(1);
+		glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, NULL);
+
+		glDrawArrays(GL_TRIANGLE_FAN, 0 /*startIdx*/, smoothness /*# Elements*/);
+		}
+	}
+
 	void drawLinks() {
+		gpuProgram[0].Use();
+
+		glGenVertexArrays(1, &vao[0]);	// get 1 vao id
+		glBindVertexArray(vao[0]);		// make it active
+
+		unsigned int vbo;		// vertex buffer object
+		glGenBuffers(1, &vbo);	// Generate 1 buffer
+		glBindBuffer(GL_ARRAY_BUFFER, vbo);
+
+		glEnableVertexAttribArray(0);  // AttribArray 0
+		glVertexAttribPointer(0,       // vbo -> AttribArray 0
+			2, GL_FLOAT, GL_FALSE, // two floats/attrib, not fixed-point
+			0, NULL);
+
+		float MVPtransf[4][4] = { 1, 0, 0, 0,    // MVP matrix, 
+								  0, 1, 0, 0,    // row-major!
+								  0, 0, 1, 0,
+								  0, 0, 0, 1 };
+
+		int location = glGetUniformLocation(gpuProgram[0].getId(), "MVP");	// Get the GPU location of uniform variable MVP
+		glUniformMatrix4fv(location, 1, GL_TRUE, &MVPtransf[0][0]);	// Load a 4x4 row-major float matrix to the specified location
 
 		std::vector<float> v;
 
-		int location = glGetUniformLocation(gpuProgram.getId(), "color");
+		location = glGetUniformLocation(gpuProgram[0].getId(), "color");
 		glUniform3f(location, 1.0f, 1.0f, 0.0f); // 3 floats
 		getLinks(&v);
 
@@ -623,7 +734,7 @@ public:
 	}
 
 	void drawPoints() {
-		int location = glGetUniformLocation(gpuProgram.getId(), "color");
+		int location = glGetUniformLocation(gpuProgram[0].getId(), "color");
 		glUniform3f(location, 0.0f, 1.0f, 0.0f); // 3 floats
 
 		std::vector<float> v;
@@ -637,28 +748,14 @@ public:
 
 		
 		glPointSize(10.0f);
-		glBindVertexArray(vao);  // Draw call
+		glBindVertexArray(vao[0]);  // Draw call
 		glDrawArrays(GL_POINTS, 0 /*startIdx*/, g_Points /*# Elements*/);
 	}
 
 	void gDraw() {
-		
-		glEnableVertexAttribArray(0);  // AttribArray 0
-		glVertexAttribPointer(0,       // vbo -> AttribArray 0
-			2, GL_FLOAT, GL_FALSE, // two floats/attrib, not fixed-point
-			0, NULL);
-
-		float MVPtransf[4][4] = { 1, 0, 0, 0,    // MVP matrix, 
-								  0, 1, 0, 0,    // row-major!
-								  0, 0, 1, 0,
-								  0, 0, 0, 1 };
-
-		int location = glGetUniformLocation(gpuProgram.getId(), "MVP");	// Get the GPU location of uniform variable MVP
-		glUniformMatrix4fv(location, 1, GL_TRUE, &MVPtransf[0][0]);	// Load a 4x4 row-major float matrix to the specified location
-		
-
 		drawLinks();
-		drawPoints();
+		//drawPoints();
+		drawTexture(0.04f, 4);
 	}
 
 };
@@ -677,12 +774,7 @@ void onInitialization() {
 	
 	glViewport(0, 0, windowWidth, windowHeight);
 
-	glGenVertexArrays(1, &vao);	// get 1 vao id
-	glBindVertexArray(vao);		// make it active
 
-	unsigned int vbo;		// vertex buffer object
-	glGenBuffers(1, &vbo);	// Generate 1 buffer
-	glBindBuffer(GL_ARRAY_BUFFER, vbo);
 	graph.init(g_Points, g_Links);
 
 	/*vec3 p = vec3(0.0f, 0.0f, 1.0f);
@@ -707,7 +799,9 @@ void onInitialization() {
 		0, NULL); 		     // stride, offset: tightly packed
 		*/
 	// create program for the GPU
-	gpuProgram.create(vertexSource, fragmentSource, "outColor");
+	gpuProgram[0].create(vertexSource, fragmentSource, "outColor");
+	gpuProgram[1].create(vertexTextureSource, fragmentTextureSource, "outColor");
+	gpuProgram[0].Use();
 }
 
 // Window has become invalid: Redraw
@@ -755,7 +849,7 @@ void onMouseMotion(int pX, int pY) {	// pX, pY are the pixel coordinates of the 
 		graph.gShift();
 		glutPostRedisplay();
 	}
-	printf("Mouse moved to (%3.2f, %3.2f)\n", cX, cY);
+	/*printf("Mouse moved to (%3.2f, %3.2f)\n", cX, cY);*/
 }
 
 // Mouse click event
@@ -771,8 +865,8 @@ void onMouse(int button, int state, int pX, int pY) { // pX, pY are the pixel co
 	}
 
 	switch (button) {
-	case GLUT_LEFT_BUTTON:   printf("Left button %s at (%3.2f, %3.2f)\n", buttonStat, cX, cY); break;
-	case GLUT_MIDDLE_BUTTON: printf("Middle button %s at (%3.2f, %3.2f)\n", buttonStat, cX, cY);  break;
+	case GLUT_LEFT_BUTTON:   /*printf("Left button %s at (%3.2f, %3.2f)\n", buttonStat, cX, cY);*/ break;
+	case GLUT_MIDDLE_BUTTON: /*printf("Middle button %s at (%3.2f, %3.2f)\n", buttonStat, cX, cY);*/  break;
 	case GLUT_RIGHT_BUTTON:  /*printf("Right button %s at (%3.2f, %3.2f)\n", buttonStat, cX, cY)*/; right = pressed; g_from = point(cX, cY); break;
 	}
 }
