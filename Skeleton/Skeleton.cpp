@@ -332,7 +332,7 @@ velocity hMirrorvt(vec3 p, vec3 q, float t) {
 float strengthOfGravityFormula(float d) {
 	//return d;
 	//return powf(2.0f, 2.f * (d - 3.0f));
-	return 0.0001f * d * d;
+	return 0.005f * d * d;
 	//return -1 / ((d - 4.0f) * (d - 4.0f) * (d - 4.0f) * (d - 4.0f));
 }
 
@@ -497,14 +497,12 @@ public:
 	
 
 	void init(int numberOfPoints, int numberOfLinks) {
-		srand(2);
 		for (int i = 0; i < numberOfPoints; i++) {
 			float x = ((float)(rand() % 1000) - 500.0f) / 500.0f;
 			float y = ((float)(rand() % 1000) - 500.0f) / 500.0f;
 
 			m_Points.push_back(new Point(x, y));
 		}
-		srand(3);
 		for (int j = 0; j < numberOfLinks; j++) {
 			bool hasItAlready = false;
 			int x = rand() % numberOfPoints;
@@ -536,8 +534,8 @@ public:
 				j--;
 			}
 		}
-		
-		heuristicPlacement();
+		bHP();
+		//heuristicPlacement();
 	}
 
 	void heuristicPlacement(){
@@ -557,8 +555,21 @@ public:
 				}
 				//azért szabad mert újraszámolom a zt szóval az sosem lesz 1 remálhetõleg
 				m_Points[i]->setC(vec3(sum.x, sum.y, 1.0f));
+			}		
+		}
+	}
+
+	void bHP() {
+		bool bad = true;
+		int score = 1000;
+		for (int i = 0; bad; i++) {
+			heuristicPlacement();
+			if(countIntersects() < score){
+				score = countIntersects();
 			}
-		
+			if (score < 120) {
+				bad = false;
+			}
 		}
 
 	}
@@ -797,27 +808,6 @@ void onInitialization() {
 
 	graph.init(g_Points, g_Links);
 
-	/*vec3 p = vec3(0.0f, 0.0f, 1.0f);
-	vec3 p1 = vec3(0.1f, 0.01f, 1.00995f);
-	vec3 p2 = vec3(-5.0f, 5.0f, 7.141428f);
-
-	printf("d1 : %f , d2 : %f", hDistance(p, p1), hDistance(p, p2));*/
-	/*
-	// Geometry with 24 bytes (6 floats or 3 x 2 coordinates)
-	float vertices[] = { -0.8f, -0.8f, -0.6f, 1.0f, 0.8f, -0.2f };
-	
-	std::vector<float> v;
-	graph.getCoordinates(&v);
-	glBufferData(GL_ARRAY_BUFFER, 	// Copy to GPU target
-		v.size() * sizeof(float),  // # bytes
-		&v[0],	      	// address
-		GL_STATIC_DRAW);	// we do not change later
-
-	glEnableVertexAttribArray(0);  // AttribArray 0
-	glVertexAttribPointer(0,       // vbo -> AttribArray 0
-		2, GL_FLOAT, GL_FALSE, // two floats/attrib, not fixed-point
-		0, NULL); 		     // stride, offset: tightly packed
-		*/
 	// create program for the GPU
 	gpuProgram[0].create(vertexSource, fragmentSource, "outColor");
 	gpuProgram[1].create(vertexTextureSource, fragmentTextureSource, "outColor");
@@ -829,20 +819,6 @@ void onDisplay() {
 	glClearColor(0, 0, 0, 0);     // background color
 	glClear(GL_COLOR_BUFFER_BIT); // clear frame buffer
 
-	/*// Set color to (0, 1, 0) = green
-	int location = glGetUniformLocation(gpuProgram.getId(), "color");
-	glUniform3f(location, 0.0f, 1.0f, 0.0f); // 3 floats
-
-	float MVPtransf[4][4] = { 1, 0, 0, 0,    // MVP matrix, 
-							  0, 1, 0, 0,    // row-major!
-							  0, 0, 1, 0,
-							  0, 0, 0, 1 };
-
-	location = glGetUniformLocation(gpuProgram.getId(), "MVP");	// Get the GPU location of uniform variable MVP
-	glUniformMatrix4fv(location, 1, GL_TRUE, &MVPtransf[0][0]);	// Load a 4x4 row-major float matrix to the specified location
-	glPointSize(10.0f);
-	glBindVertexArray(vao);  // Draw call
-	glDrawArrays(GL_POINTS, 0 /*startIdx*//*, g_Points /*# Elements*///);	
 	graph.gDraw();
 	glutSwapBuffers(); // exchange buffers for double buffering
 }
@@ -853,6 +829,14 @@ void onKeyboard(unsigned char key, int pX, int pY) {
 	if (key == 'a') { graph.sumVelocity(); glutPostRedisplay();}
 	if (key == 's') { graph.heuristicPlacement(); glutPostRedisplay(); }
 	if (key == 'c') { printf("Intersects : %d\n", graph.countIntersects()); }
+	if (key == ' ') { 
+		graph.bHP();
+		for (int i = 0; i < 200; i++) {
+			graph.sumVelocity();
+			glutPostRedisplay();
+			onDisplay();
+		}
+	}
 }
 
 // Key of ASCII code released
