@@ -111,6 +111,7 @@ const char* const fragmentTextureSource = R"(
 
 GPUProgram gpuProgram[2]; // vertex and fragment shaders
 unsigned int vao[2];	   // virtual world on the GPU
+unsigned int vbo[2];
 
 /// ---------------------------------------------------------------------------------------------
 //new bases
@@ -492,6 +493,8 @@ class Graph2 {
 public:
 	std::vector<Point*> m_Points;
 	std::vector<int> m_Links;
+	
+	
 
 	void init(int numberOfPoints, int numberOfLinks) {
 		srand(2);
@@ -533,6 +536,7 @@ public:
 				j--;
 			}
 		}
+		
 		heuristicPlacement();
 	}
 
@@ -655,11 +659,10 @@ public:
 	void drawTexture(float r, int smoothness) {
 		gpuProgram[1].Use();
 
-		glGenVertexArrays(1, &vao[1]);	// get 1 vao id
+	//	glGenVertexArrays(1, &vao[1]);	// get 1 vao id
 		glBindVertexArray(vao[1]);		// make it active
 
-		unsigned int vbo[2];		// vertex buffer object
-		glGenBuffers(2, &vbo[0]);	// Generate 1 buffer
+	// Generate 1 buffer
 		
 		float j = 1.0f;
 		float k = 0.0f;
@@ -711,69 +714,62 @@ public:
 	void drawLinks() {
 		gpuProgram[0].Use();
 
-		glGenVertexArrays(1, &vao[0]);	// get 1 vao id
-		glBindVertexArray(vao[0]);		// make it active
+		glBindVertexArray(vao[0]);		
+		glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
 
-		unsigned int vbo;		// vertex buffer object
-		glGenBuffers(1, &vbo);	// Generate 1 buffer
-		glBindBuffer(GL_ARRAY_BUFFER, vbo);
-
-		glEnableVertexAttribArray(0);  // AttribArray 0
-		glVertexAttribPointer(0,       // vbo -> AttribArray 0
-			2, GL_FLOAT, GL_FALSE, // two floats/attrib, not fixed-point
-			0, NULL);
+		glEnableVertexAttribArray(0);  
+		glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, NULL);
 
 		float MVPtransf[4][4] = { 1, 0, 0, 0,    // MVP matrix, 
 								  0, 1, 0, 0,    // row-major!
 								  0, 0, 1, 0,
 								  0, 0, 0, 1 };
 
-		int location = glGetUniformLocation(gpuProgram[0].getId(), "MVP");	// Get the GPU location of uniform variable MVP
-		glUniformMatrix4fv(location, 1, GL_TRUE, &MVPtransf[0][0]);	// Load a 4x4 row-major float matrix to the specified location
+		int location = glGetUniformLocation(gpuProgram[0].getId(), "MVP");
+		glUniformMatrix4fv(location, 1, GL_TRUE, &MVPtransf[0][0]);	
 
 		std::vector<float> v;
 
 		location = glGetUniformLocation(gpuProgram[0].getId(), "color");
-		glUniform3f(location, 1.0f, 1.0f, 0.0f); // 3 floats
+		glUniform3f(location, 1.0f, 1.0f, 0.0f); 
 		getLinks(&v);
 
-		/*for (auto f : v) {
-			printf("%f \n", f);
-		}*/
-		glBufferData(GL_ARRAY_BUFFER, 	// Copy to GPU target
-			v.size() * sizeof(float),  // # bytes
-			&v[0],	      	// address
-			GL_DYNAMIC_DRAW);	// we do not change later
+		glBufferData(GL_ARRAY_BUFFER, 
+			v.size() * sizeof(float), &v[0], GL_DYNAMIC_DRAW);	
 
 		glPointSize(10.0f);
-		glDrawArrays(GL_LINES, 0 /*startIdx*/, g_Links*2 /*# Elements*/);
+		glDrawArrays(GL_LINES, 0, g_Links*2);
 	}
 
 	void drawPoints() {
 		gpuProgram[0].Use();
+		glBindVertexArray(vao[0]);
+		glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
 		int location = glGetUniformLocation(gpuProgram[0].getId(), "color");
 		glUniform3f(location, 0.70f, 0.70f, 0.70f); // 3 floats
 
 		
 		for (Point* p : m_Points) {
 			std::vector<float> v;
-
+			
 
 			for (int i = 0; i < 20; i++) {
 				float fi = (i * 2 * M_PI / 20) + M_PI / 4.0f;
-				float x = p->m_Coordinates.x + 0.045f * cosf(fi);
-				float y = p->m_Coordinates.y + 0.045f * sinf(fi);
+				float x = p->m_Coordinates.x + 0.045 * cosf(fi);
+				float y = p->m_Coordinates.y + 0.045 * sinf(fi);
 				float z = sqrtf(x * x + y * y + 1.0f);
 				v.push_back(x / z);
 				v.push_back(y / z);
 			}
-			glBufferData(GL_ARRAY_BUFFER, 	// Copy to GPU target
-				v.size() * sizeof(float),  // # bytes
-				&v[0],	      	// address
-				GL_DYNAMIC_DRAW);	// we do not change later
+		glBufferData(GL_ARRAY_BUFFER, 	// Copy to GPU target
+			v.size() * sizeof(float),  // # bytes
+			&v[0],	      	// address
+			GL_DYNAMIC_DRAW);	// we do not change later
 
-			glBindVertexArray(vao[0]);  // Draw call
-			glDrawArrays(GL_TRIANGLE_FAN, 0 /*startIdx*/, 20 /*# Elements*/);
+		
+		glPointSize(10.0f);
+		glBindVertexArray(vao[0]);  // Draw call
+		glDrawArrays(GL_TRIANGLE_FAN, 0 /*startIdx*/, 20 /*# Elements*/);
 		}
 	}
 
@@ -785,9 +781,6 @@ public:
 
 };
 
-class UnitCircle {
-
-};
 
 /// ---------------------------------------------------------------------------------------------
 
@@ -799,6 +792,8 @@ void onInitialization() {
 	
 	glViewport(0, 0, windowWidth, windowHeight);
 
+	glGenVertexArrays(2, &vao[0]);
+	glGenBuffers(2, &vbo[0]);
 
 	graph.init(g_Points, g_Links);
 
