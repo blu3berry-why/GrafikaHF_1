@@ -86,13 +86,13 @@ const char* const fragmentTextureSource = R"(
 
 	vec4 color(vec2 uv){
 		float x = 0;
-		float y = 0;
+		float y = 0.7f;
 		float z = 0;
-		for(int i = 0; i < 9; i++){
+		for(int i = 0; i < 10; i++){
 			if(uv.x > i){
-				x += 0.125;
+				x += 0.1;
 			}else if(uv.y > i){
-				y += 0.125;
+				y -= 0.1;
 			}
 			if(i%2 == 0 && uv.x > i){
 				z=0;
@@ -116,13 +116,13 @@ unsigned int vbo[2];
 /// ---------------------------------------------------------------------------------------------
 //new bases
 
-const int g_Points = 51; //50;
+const int g_Points = 50; //50;
 const int g_Links = 61; //61;
-const float g_IdealDistance = 0.5f;
-const float g_Vectorlength = 0.2f;
+const float g_IdealDistance = 0.3f;
+const float g_Vectorlength = 0.04f;
 const float g_Friction = 0.1;
 // higheris lower less (steeper)
-const float g_StrengthOfAffection = 6; //6  works just fine with 50,61 graph
+const float g_StrengthOfAffection = 3; //6  works just fine with 50,61 graph
 //higher is bigger (steeper)
 const float g_StrengthOfRepulsion = 10; //55
 
@@ -269,7 +269,7 @@ float repulsion(float d) {
 velocity hVector(vec3 p, vec3 q, bool neighbour) {
 	vec3 nv = hNormalVector(p, q);
 	float d = hDistance(p, q);
-
+	bool n = false;
 	//if neighbour
 	if (neighbour) {
 		//printf("\n %f", d);
@@ -279,7 +279,8 @@ velocity hVector(vec3 p, vec3 q, bool neighbour) {
 	//if not
 	}else {
 		if ((d - g_IdealDistance) > 0) {
-			d = 0;
+			d = - 1.0f;
+			n = true;
 		}
 		else {
 			d = d - g_IdealDistance;
@@ -293,7 +294,7 @@ velocity hVector(vec3 p, vec3 q, bool neighbour) {
 	}
 	//ha nem nulla és pozitív akkor vonzás
 	if (d > 0.0f) {
-		//TESZT--------------------------------------------------------------------------------
+		
 		d = affection(d);
 		v = velocity(coshf(d), nv * sinhf(d));
 	}else {
@@ -305,7 +306,23 @@ velocity hVector(vec3 p, vec3 q, bool neighbour) {
 		//szabad mert ez a rásze lett negatív az elején
 		//d = g_IdealDistance -d;
 		//TESZT--------------------------------------------------------------------------------
-		d = repulsion(d);
+		if (neighbour) {
+			d = repulsion(d);
+			if (d == 0) { 
+				d = 0.0000000001f;
+			}
+		}
+		else {
+			if (d == 0) {
+				d = 0.0f;
+			}
+			else {
+				d = 1 / (800.0f * d);
+			}
+		}
+
+		//TESZT--------------------------------------------------------------------------------
+		
 		if (sinhf(d) == 0.0f) {
 
 			return velocity(1.0f, vec3(0, 0, 0));
@@ -438,7 +455,7 @@ public:
 	}
 
 	void hPrint() {
-	//	printf("x : %f\ty : %f\tz : %f\n", m_Coordinates.x, m_Coordinates.y, m_Coordinates.z);
+		//printf("x : %f\ty : %f\tz : %f\n", m_Coordinates.x, m_Coordinates.y, m_Coordinates.z);
 	}
 
 	void hVprint() {
@@ -534,27 +551,27 @@ public:
 				j--;
 			}
 		}
-		bHP();
-		//heuristicPlacement();
+		//bHP();
+		heuristicPlacement();
 	}
 
 	void heuristicPlacement(){
 		if (g_Points > 5) {
 			//sort(); Nem segít
 			for (int i = 0; i < 5; i++) {
-				float x = ((float)(rand() % 1000) - 500.0f) / 1000.0f;
-				float y = ((float)(rand() % 1000) - 500.0f) / 1000.0f;
+				float x = ((float)(rand() % 1000) /*- 500.0f*/) / 1000.0f;
+				float y = ((float)(rand() % 1000)/* - 500.0f*/) / 1000.0f;
 				delete m_Points[i];
 				m_Points[i]= new Point(x, y);
 			}
 
 			for (int i = 5; i < g_Points; i++) {
 				vec2 sum = vec2(0.0f, 0.0f);
-				for (int j = i; j >= 0; j--) {
+				for (int j = i-1; j >= 0; j--) {
 					sum = sum + m_Points[j]->centerOfMass(m_Points[i]);
 				}
 				//azért szabad mert újraszámolom a zt szóval az sosem lesz 1 remálhetõleg
-				m_Points[i]->setC(vec3(sum.x, sum.y, 1.0f));
+				m_Points[i]->setC(vec3(sum.x/ i, sum.y/ i, 1.0f));
 			}		
 		}
 	}
@@ -567,7 +584,7 @@ public:
 			if(countIntersects() < score){
 				score = countIntersects();
 			}
-			if (score < 120) {
+			if (score < 205) {
 				bad = false;
 			}
 		}
@@ -616,8 +633,8 @@ public:
 		
 		for (int i = 0; i < m_Points.size(); i++) {
 			m_Points[i]->pointsInVector(v);
-			//printf("[%d]\t", i);
-		//	m_Points[i]->hPrint();
+			printf("[%d]\t", i);
+			m_Points[i]->hPrint();
 		}
 		return v;
 	}
@@ -655,7 +672,7 @@ public:
 				}
 			}
 			m_Points[i]->forceOfOrigo();
-			m_Points[i]->hVprint();
+			//m_Points[i]->hVprint();
 		}
 
 		for (auto p : m_Points) {
@@ -787,7 +804,7 @@ public:
 	void gDraw() {
 		drawLinks();
 		drawPoints();
-		drawTexture(0.04f, 4);
+		drawTexture(0.04f, 5);
 	}
 
 };
@@ -831,7 +848,7 @@ void onKeyboard(unsigned char key, int pX, int pY) {
 	if (key == 'c') { printf("Intersects : %d\n", graph.countIntersects()); }
 	if (key == ' ') { 
 		graph.bHP();
-		for (int i = 0; i < 200; i++) {
+		for (int i = 0; i < 300; i++) {
 			graph.sumVelocity();
 			glutPostRedisplay();
 			onDisplay();
