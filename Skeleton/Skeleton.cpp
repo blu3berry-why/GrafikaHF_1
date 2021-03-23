@@ -85,22 +85,12 @@ const char* const fragmentTextureSource = R"(
 	out vec4 outColor;		// computed color of the current pixel
 
 	vec4 color(vec2 uv){
-		float x = 0;
-		float y = 0.7f;
-		float z = 0;
-		for(int i = 0; i < 10; i++){
-			if(uv.x > i){
-				x += 0.1;
-			}else if(uv.y > i){
-				y -= 0.1;
-			}
-			if(i%2 == 0 && uv.x > i){
-				z=0;
-			}else if(i%2 == 1 && uv.x > i){
-				z=1;
-			}
-		}
-
+		float x = 1.0f;
+		float y = 0.0f;
+		float z = 0.0f;
+		x = uv.x ;
+		y = abs(sin(4.0f * uv.y)*sin(4.0f * uv.y)*sin(200.0f * uv.y)) ;
+		z = 1- uv.y;//abs(abs(x-0.3f) * cos(20.0f * uv.x))*2;
 		return vec4( x, y, z, 1);
 	}
 
@@ -120,12 +110,16 @@ const int g_Points = 50; //50;
 const int g_Links = 61; //61;
 const float g_IdealDistance = 0.3f;
 const float g_Vectorlength = 0.04f;
-const float g_Friction = 0.1;
+const float g_ConstFriction = 0.1;
+ float g_Friction = 0.1;
 // higheris lower less (steeper)
 const float g_StrengthOfAffection = 3; //6  works just fine with 50,61 graph
 //higher is bigger (steeper)
 const float g_StrengthOfRepulsion = 10; //55
-
+int g_SlowEnd = 150;
+const int g_End = 150;
+bool g_Moved = false;
+bool g_RestartNeeded = false;
 
 //working numbers:
 /*
@@ -349,7 +343,7 @@ velocity hMirrorvt(vec3 p, vec3 q, float t) {
 float strengthOfGravityFormula(float d) {
 	//return d;
 	//return powf(2.0f, 2.f * (d - 3.0f));
-	return 0.005f * d * d;
+	return 0.01f * d * d;
 	//return -1 / ((d - 4.0f) * (d - 4.0f) * (d - 4.0f) * (d - 4.0f));
 }
 
@@ -557,7 +551,6 @@ public:
 
 	void heuristicPlacement(){
 		if (g_Points > 5) {
-			//sort(); Nem segít
 			for (int i = 0; i < 5; i++) {
 				float x = ((float)(rand() % 1000) /*- 500.0f*/) / 1000.0f;
 				float y = ((float)(rand() % 1000)/* - 500.0f*/) / 1000.0f;
@@ -692,8 +685,8 @@ public:
 
 	// Generate 1 buffer
 		
-		float j = 1.0f;
-		float k = 0.0f;
+		float j = 0.02f;
+		float k = 0.02f;
 
 		for (Point* p : m_Points) {
 			std::vector<float> v;
@@ -706,13 +699,13 @@ public:
 				float z = sqrtf(x * x + y * y + 1.0f);
 				v.push_back(x / z);
 				v.push_back(y / z);
-				vUV.push_back(j + cosf(fi));
-				vUV.push_back(k + sinf(fi));
+				vUV.push_back(j + cosf(fi)*0.003);
+				vUV.push_back(k + sinf(fi) * 0.007);
 			}
-			j += 1.0f;
-			if (j == 7.0f) {
-				j = 1.0f;
-				k += 1.0f;
+			j += 0.02f;
+			k += 0.15f;
+			if (k > 1.0f) {
+				k = 0.2f;
 			}
 		glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
 
@@ -847,12 +840,8 @@ void onKeyboard(unsigned char key, int pX, int pY) {
 	if (key == 's') { graph.heuristicPlacement(); glutPostRedisplay(); }
 	if (key == 'c') { printf("Intersects : %d\n", graph.countIntersects()); }
 	if (key == ' ') { 
-		graph.bHP();
-		for (int i = 0; i < 300; i++) {
-			graph.sumVelocity();
-			glutPostRedisplay();
-			onDisplay();
-		}
+		g_Moved = false;
+		g_RestartNeeded = true;
 	}
 }
 
@@ -888,11 +877,30 @@ void onMouse(int button, int state, int pX, int pY) { // pX, pY are the pixel co
 	switch (button) {
 	case GLUT_LEFT_BUTTON:   /*printf("Left button %s at (%3.2f, %3.2f)\n", buttonStat, cX, cY);*/ break;
 	case GLUT_MIDDLE_BUTTON: /*printf("Middle button %s at (%3.2f, %3.2f)\n", buttonStat, cX, cY);*/  break;
-	case GLUT_RIGHT_BUTTON:  /*printf("Right button %s at (%3.2f, %3.2f)\n", buttonStat, cX, cY)*/; right = pressed; g_from = point(cX, cY); break;
+	case GLUT_RIGHT_BUTTON:  /*printf("Right button %s at (%3.2f, %3.2f)\n", buttonStat, cX, cY)*/; right = pressed; g_Moved = true; g_from = point(cX, cY); break;
 	}
 }
 
 // Idle event indicating that some time elapsed: do animation here
 void onIdle() {
 	long time = glutGet(GLUT_ELAPSED_TIME); // elapsed time since the start of the program
+	if (!g_Moved) {
+		if (g_RestartNeeded) {
+			graph.heuristicPlacement();
+			g_RestartNeeded = false;
+			g_SlowEnd = g_End;
+			g_Friction = g_ConstFriction;
+		}
+		g_SlowEnd--;
+		if (g_SlowEnd < 0) {
+			g_Friction = g_Friction + 0.005;
+		}
+		for (int i = 0; i < 5; i++) {
+			graph.sumVelocity();
+		}
+	}
+	else {
+		g_RestartNeeded = true;
+	}
+	glutPostRedisplay();
 }
