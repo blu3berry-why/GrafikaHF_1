@@ -34,7 +34,6 @@
 #include "framework.h"
 
 
-// vertex shader in GLSL: It is a Raw string (C++11) since it contains new line characters
 const char * const vertexSource = R"(
 	#version 330				// Shader 3.3
 	precision highp float;		// normal floats, makes no difference on desktop computers
@@ -47,7 +46,6 @@ const char * const vertexSource = R"(
 	}
 )";
 
-// fragment shader in GLSL
 const char * const fragmentSource = R"(
 	#version 330			// Shader 3.3
 	precision highp float;	// normal floats, makes no difference on desktop computers
@@ -99,26 +97,21 @@ const char* const fragmentTextureSource = R"(
 	}
 )";
 
-GPUProgram gpuProgram[2]; // vertex and fragment shaders
-unsigned int vao[2];	   // virtual world on the GPU
+GPUProgram gpuProgram[2]; 
+unsigned int vao[2];
 unsigned int vbo[2];
 
-/// ---------------------------------------------------------------------------------------------
-//new bases
-
-const int g_Points = 50; //50;
-const int g_Links = 61; //61;
+const int g_Points = 50; 
+const int g_Links = 61; 
 const float g_IdealDistance = 0.3f;
 const float g_Vectorlength = 0.04f;
 const float g_ConstFriction = 0.1;
- float g_Friction = 0.1;
-// higheris lower less (steeper)
-const float g_StrengthOfAffection = 3; //6  works just fine with 50,61 graph
-//higher is bigger (steeper)
-const float g_StrengthOfRepulsion = 10; //55
+float g_Friction = 0.1;
+const float g_StrengthOfAffection = 3; 
+const float g_StrengthOfRepulsion = 10;
 int g_SlowEnd = 150;
 const int g_End = 150;
-bool g_Moved = false;
+bool g_Moved = true;
 bool g_RestartNeeded = false;
 
 //working numbers:
@@ -200,6 +193,7 @@ struct line {
 	float b;
 	float p;
 	float q;
+	bool inf;
 	line(float x1, float y1, float x2, float y2) {
 		if (x1 != x2) {
 			if (x1 > x2) {
@@ -212,10 +206,11 @@ struct line {
 				p = x2;
 				q = x1;
 			}
+			inf = false;
 		}
 		else {
 			//kikötés ha x1 - x2 = 0
-			m = 999999999.0f;
+			inf = true;
 			p = x1;
 			q = x2;
 		}
@@ -228,8 +223,24 @@ bool intersect(line s, line t){
 	if (t.m == s.m) {
 		return false;
 	}
+	if (t.inf) {
+		if (s.p - 0.00001f > t.p && t.p > s.q + 0.00001f) {
+			return true;
+		}
+		else {
+			return false;
+		}
+	}
+	if (s.inf) {
+		if (t.p - 0.00001f > s.p && s.p > t.q + 0.00001f) {
+			return true;
+		}
+		else {
+			return false;
+		}
+	}
 	float x = (s.b - t.b) / (t.m - s.m);
-	if (s.p -0.0000001f > x && x > s.q + 0.0000001f && t.p - 0.0000001f > x && x > t.q + 0.0000001f) {
+	if (s.p -0.00001f > x && x > s.q + 0.00001f && t.p - 0.00001f > x && x > t.q + 0.00001f) {
 		return true;
 	}
 	else {
@@ -283,7 +294,6 @@ velocity hVector(vec3 p, vec3 q, bool neighbour) {
 	velocity v;
 
 	if (sinhf(d) == 0.0f) {
-
 		return velocity(1.0f, vec3(0, 0, 0));
 	}
 	//ha nem nulla és pozitív akkor vonzás
@@ -302,9 +312,6 @@ velocity hVector(vec3 p, vec3 q, bool neighbour) {
 		//TESZT--------------------------------------------------------------------------------
 		if (neighbour) {
 			d = repulsion(d);
-			if (d == 0) { 
-				d = 0.0000000001f;
-			}
 		}
 		else {
 			if (d == 0) {
@@ -546,14 +553,15 @@ public:
 			}
 		}
 		//bHP();
-		heuristicPlacement();
+		//heuristicPlacement();
 	}
 
-	void heuristicPlacement(){
+ 	void heuristicPlacement(){
+		//sort();
 		if (g_Points > 5) {
 			for (int i = 0; i < 5; i++) {
 				float x = ((float)(rand() % 1000) /*- 500.0f*/) / 1000.0f;
-				float y = ((float)(rand() % 1000)/* - 500.0f*/) / 1000.0f;
+				float y = ((float)(rand() % 1000) /*- 500.0f*/) / 1000.0f;
 				delete m_Points[i];
 				m_Points[i]= new Point(x, y);
 			}
@@ -564,7 +572,7 @@ public:
 					sum = sum + m_Points[j]->centerOfMass(m_Points[i]);
 				}
 				//azért szabad mert újraszámolom a zt szóval az sosem lesz 1 remálhetõleg
-				m_Points[i]->setC(vec3(sum.x/ i, sum.y/ i, 1.0f));
+				m_Points[i]->setC(vec3(sum.x/ (float)i, sum.y/ (float)i));
 			}		
 		}
 	}
@@ -577,7 +585,7 @@ public:
 			if(countIntersects() < score){
 				score = countIntersects();
 			}
-			if (score < 205) {
+			if (score < 105) {
 				bad = false;
 			}
 		}
@@ -594,8 +602,8 @@ public:
 			q = m_Points[m_Links[2 * i + 1]]->homogeneousCoordinates();
 			lines.push_back(line(q.x, q.y, p.x, p.y));
 		}
-		for (int i = 0; i < lines.size(); i++) {
-			for (int j = i; j >= 0; j--) {
+		for (int i = 0; i < lines.size() - 1; i++) {
+			for (int j = i + 1; j < lines.size(); j++) {
 				if (lines[i].m != lines[j].m) {
 					if (intersect(lines[i], lines[j])) {
 						intersects++;
@@ -674,17 +682,20 @@ public:
 		
 	}
 
+	~Graph2() {
+		for (auto p : m_Points) {
+			delete p;
+		}
+		
+	}
+
 
 
 	// OpenGL stuff ---------------------------------------------------------------
 	void drawTexture(float r, int smoothness) {
 		gpuProgram[1].Use();
+		glBindVertexArray(vao[1]);
 
-	//	glGenVertexArrays(1, &vao[1]);	// get 1 vao id
-		glBindVertexArray(vao[1]);		// make it active
-
-	// Generate 1 buffer
-		
 		float j = 0.02f;
 		float k = 0.02f;
 
@@ -709,8 +720,8 @@ public:
 			}
 		glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
 
-		float MVPtransf[4][4] = { 1, 0, 0, 0,    // MVP matrix, 
-						  0, 1, 0, 0,    // row-major!
+		float MVPtransf[4][4] = { 1, 0, 0, 0,    
+						  0, 1, 0, 0,    
 						  0, 0, 1, 0,
 						  0, 0, 0, 1 };
 
@@ -728,7 +739,7 @@ public:
 		glEnableVertexAttribArray(1);
 		glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, NULL);
 
-		glDrawArrays(GL_TRIANGLE_FAN, 0 /*startIdx*/, smoothness /*# Elements*/);
+		glDrawArrays(GL_TRIANGLE_FAN, 0 , smoothness);
 		}
 	}
 
@@ -767,7 +778,7 @@ public:
 		glBindVertexArray(vao[0]);
 		glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
 		int location = glGetUniformLocation(gpuProgram[0].getId(), "color");
-		glUniform3f(location, 0.70f, 0.70f, 0.70f); // 3 floats
+		glUniform3f(location, 0.70f, 0.70f, 0.70f);
 
 		
 		for (Point* p : m_Points) {
@@ -850,8 +861,7 @@ void onKeyboardUp(unsigned char key, int pX, int pY) {
 }
 
 // Move mouse with key pressed
-void onMouseMotion(int pX, int pY) {	// pX, pY are the pixel coordinates of the cursor in the coordinate system of the operation system
-	// Convert to normalized device space
+void onMouseMotion(int pX, int pY) {	
 	float cX = 2.0f * pX / windowWidth - 1;	// flip y axis
 	float cY = 1.0f - 2.0f * pY / windowHeight;
 	g_to = point(cX, cY);
@@ -893,7 +903,9 @@ void onIdle() {
 		}
 		g_SlowEnd--;
 		if (g_SlowEnd < 0) {
-			g_Friction = g_Friction + 0.005;
+			if (g_Friction < 1.0f) {
+				g_Friction = g_Friction + 0.005;
+			}
 		}
 		for (int i = 0; i < 5; i++) {
 			graph.sumVelocity();
