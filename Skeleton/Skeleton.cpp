@@ -33,54 +33,53 @@
 //=============================================================================================
 #include "framework.h"
 
-
 const char * const vertexSource = R"(
-	#version 330				// Shader 3.3
-	precision highp float;		// normal floats, makes no difference on desktop computers
+	#version 330				
+	precision highp float;		
 
-	uniform mat4 MVP;			// uniform variable, the Model-View-Projection transformation matrix
-	layout(location = 0) in vec2 vp;	// Varying input: vp = vertex position is expected in attrib array 0
+	uniform mat4 MVP;			
+	layout(location = 0) in vec2 vp;	
 
 	void main() {
-		gl_Position = vec4(vp.x, vp.y, 0, 1) * MVP;		// transform vp from modeling space to normalized device space
+		gl_Position = vec4(vp.x, vp.y, 0, 1) * MVP;		
 	}
 )";
 
 const char * const fragmentSource = R"(
-	#version 330			// Shader 3.3
-	precision highp float;	// normal floats, makes no difference on desktop computers
+	#version 330			
+	precision highp float;	
 	
-	uniform vec3 color;		// uniform variable, the color of the primitive
-	out vec4 outColor;		// computed color of the current pixel
+	uniform vec3 color;		
+	out vec4 outColor;		
 
 	void main() {
-		outColor = vec4(color, 1);	// computed color is the color of the primitive
+		outColor = vec4(color, 1);	
 	}
 )";
 
 const char* const vertexTextureSource = R"(	
-	#version 330				// Shader 3.3
-	precision highp float;		// normal floats, makes no difference on desktop computers
+	#version 330				
+	precision highp float;		
 
-	uniform mat4 MVP;			// uniform variable, the Model-View-Projection transformation matrix
-	layout(location = 0) in vec2 vp;	// Varying input: vp = vertex position is expected in attrib array 0
-	layout(location = 1) in vec2 vUV;	// Attrib array 1
+	uniform mat4 MVP;			
+	layout(location = 0) in vec2 vp;
+	layout(location = 1) in vec2 vUV;	
 
 	out vec2 texCoord;		//output
 
 	void main() {
 		texCoord = vUV;		//copy texture coordinates
-		gl_Position = vec4(vp.x, vp.y, 0, 1) * MVP;		// transform vp from modeling space to normalized device space
+		gl_Position = vec4(vp.x, vp.y, 0, 1) * MVP;		
 	}
 
 )";
 
 const char* const fragmentTextureSource = R"(
-	#version 330			// Shader 3.3
-	precision highp float;	// normal floats, makes no difference on desktop computers
+	#version 330			
+	precision highp float;	
 	
 	in vec2 texCoord;
-	out vec4 outColor;		// computed color of the current pixel
+	out vec4 outColor;		
 
 	vec4 color(vec2 uv){
 		float x = 1.0f;
@@ -88,7 +87,7 @@ const char* const fragmentTextureSource = R"(
 		float z = 0.0f;
 		x = uv.x ;
 		y = abs(sin(4.0f * uv.y)*sin(4.0f * uv.y)*sin(200.0f * uv.y)) ;
-		z = 1- uv.y;//abs(abs(x-0.3f) * cos(20.0f * uv.x))*2;
+		z = 1- uv.y;
 		return vec4( x, y, z, 1);
 	}
 
@@ -114,11 +113,6 @@ const int g_End = 150;
 bool g_Moved = true;
 bool g_RestartNeeded = false;
 
-//working numbers:
-/*
-	6 , 10
-
-*/
 
 float lorentz(vec3 p, vec3 q) {
 	return p.x * q.x + p.y * q.y - p.z * q.z;
@@ -131,13 +125,12 @@ float hDistance(vec3 p, vec3 q) {
 	return acoshf(-lorentz(q, p));
 }
 
-//normal vector from p to q
 vec3 hNormalVector(vec3 p, vec3 q) {
 	float d = hDistance(p, q);
 	if (sinhf(d) == 0.0f) {
 		return vec3(0, 0, 0);
 	}
-	vec3 v = (q - p * coshf(d)) / sinhf(d);//sinhf --> lehet 0 akkor mit kell csinálni?
+	vec3 v = (q - p * coshf(d)) / sinhf(d);
 	return v; 
 }
 
@@ -150,12 +143,10 @@ vec3 hMirrorpt(vec3 p, vec3 q, float t) {
 	return p * coshf(d) + nv * sinhf(d);
 }
 
-//mirroring p on q
 vec3 hMirror(vec3 p, vec3 q){
 	return hMirrorpt(p, q, 2.0f);
 }
 
-//get the point halfway between p and q
 vec3 hHalfWay(vec3 p, vec3 q) {
 	return hMirrorpt(p, q, 0.5f);
 }
@@ -168,8 +159,6 @@ struct point {
 		x = X;
 		y = Y;
 	}
-	point() {}
-
 };
 
 struct velocity {
@@ -184,104 +173,26 @@ struct velocity {
 		cosd = 1.0f;
 		v = vec3(0, 0, 0);
 	}
-	//elõtte
-	velocity operator+(const velocity& vel) const { return velocity(cosd * vel.cosd, v * vel.cosd/*ezzel pluszban szorzom*/ + vel.v); }
+	velocity operator+(const velocity& vel) const { return velocity(cosd * vel.cosd, v * vel.cosd + vel.v); }
 };
-
-struct line {
-	float m;
-	float b;
-	float p;
-	float q;
-	bool inf;
-	line(float x1, float y1, float x2, float y2) {
-		if (x1 != x2) {
-			if (x1 > x2) {
-				m = (y1 - y2) / (x1 - x2);
-				p = x1;
-				q = x2;
-			}
-			else {
-				m = (y2 - y1) / (x2 - x1);
-				p = x2;
-				q = x1;
-			}
-			inf = false;
-		}
-		else {
-			//kikötés ha x1 - x2 = 0
-			inf = true;
-			p = x1;
-			q = x2;
-		}
-		b = y1 - (m * x1);
-	}
-
-};
-
-bool intersect(line s, line t){
-	if (t.m == s.m) {
-		return false;
-	}
-	if (t.inf) {
-		if (s.p - 0.00001f > t.p && t.p > s.q + 0.00001f) {
-			return true;
-		}
-		else {
-			return false;
-		}
-	}
-	if (s.inf) {
-		if (t.p - 0.00001f > s.p && s.p > t.q + 0.00001f) {
-			return true;
-		}
-		else {
-			return false;
-		}
-	}
-	float x = (s.b - t.b) / (t.m - s.m);
-	if (s.p -0.00001f > x && x > s.q + 0.00001f && t.p - 0.00001f > x && x > t.q + 0.00001f) {
-		return true;
-	}
-	else {
-		return false;
-	}
-
-}
-
 
 float affection(float d) {
-
-	
 	d= powf(2.0f, d - g_StrengthOfAffection - g_IdealDistance) - powf(2, -g_StrengthOfAffection);
-	/*	if (d < 0.004) {
-			return 5;
-		}*/
 	return d;
 
 }
 
 float repulsion(float d) {
-	/*if (d == 0) {
-		return 0;
-	}
-
-	return 1.0f / (g_StrengthOfRepulsion * d) - 1.0f / (g_StrengthOfRepulsion - g_IdealDistance);*/
 	return g_StrengthOfRepulsion * powf(d - g_IdealDistance, 2.0f);
 
 }
-//vecolcity based functions
+
 velocity hVector(vec3 p, vec3 q, bool neighbour) {
 	vec3 nv = hNormalVector(p, q);
 	float d = hDistance(p, q);
 	bool n = false;
-	//if neighbour
 	if (neighbour) {
-		//printf("\n %f", d);
 		d = d - g_IdealDistance ;
-		
-		//printf("\n %f \n", d);
-	//if not
 	}else {
 		if ((d - g_IdealDistance) > 0) {
 			d = - 1.0f;
@@ -292,24 +203,16 @@ velocity hVector(vec3 p, vec3 q, bool neighbour) {
 		}
 	}
 	velocity v;
-
 	if (sinhf(d) == 0.0f) {
 		return velocity(1.0f, vec3(0, 0, 0));
 	}
-	//ha nem nulla és pozitív akkor vonzás
 	if (d > 0.0f) {
-		
 		d = affection(d);
 		v = velocity(coshf(d), nv * sinhf(d));
 	}else {
-		//vec3 h = hHalfWay(p, q);
 		vec3 qstroke = hMirrorpt(q, p, 2.0f);
-		//qstroke = hMirrorpt(qstroke, p, 2.0f);
 		nv = hNormalVector(p, qstroke);
 		d = hDistance(p, qstroke);
-		//szabad mert ez a rásze lett negatív az elején
-		//d = g_IdealDistance -d;
-		//TESZT--------------------------------------------------------------------------------
 		if (neighbour) {
 			d = repulsion(d);
 		}
@@ -321,23 +224,17 @@ velocity hVector(vec3 p, vec3 q, bool neighbour) {
 				d = 1 / (800.0f * d);
 			}
 		}
-
-		//TESZT--------------------------------------------------------------------------------
-		
 		if (sinhf(d) == 0.0f) {
-
 			return velocity(1.0f, vec3(0, 0, 0));
 		}
 		v = velocity(coshf(d), nv * sinhf(d));
 	}
-	
 	return v;
 }
-//velocity p->q 
+
 velocity hMirrorvt(vec3 p, vec3 q, float t) {
 	vec3 nv = hNormalVector(p, q);
 	float d = t * hDistance(p, q);
-	//beírás
 	if (d > g_Vectorlength) {
 		d = g_Vectorlength;
 	}
@@ -348,20 +245,14 @@ velocity hMirrorvt(vec3 p, vec3 q, float t) {
 }
 
 float strengthOfGravityFormula(float d) {
-	//return d;
-	//return powf(2.0f, 2.f * (d - 3.0f));
 	return 0.01f * d * d;
-	//return -1 / ((d - 4.0f) * (d - 4.0f) * (d - 4.0f) * (d - 4.0f));
 }
 
 velocity hGravity(vec3 p) {
 	vec3 nv = hNormalVector(p, vec3(0, 0, 1));
 	float d = hDistance(p, vec3(0, 0, 1));
 	return velocity(coshf(strengthOfGravityFormula(d)), nv * sinhf(strengthOfGravityFormula(d)));
-
-
 }
-
 
 point g_from = point(0, 0);
 point g_to = point(0, 0);
@@ -374,8 +265,6 @@ public:
 	velocity m_Velocity;
 	std::vector<Point*> m_Neighbours;
 
-
-	//constructor to give the point coordinates on the hiperboloid
 	Point(vec3 v) {
 		if (v.z > sqrtf(3.f)) {
 			v.z = sqrtf(3.f);
@@ -384,27 +273,14 @@ public:
 			v.z = 1.0f;
 		}
 		m_Coordinates = v;
-
 	}
 
-	//give the point in descartes coordinates
 	Point(float x, float y) {
 		float z = sqrtf(x * x + y * y + 1.0f);
 		m_Coordinates = vec3(x, y, z);
 
 	}
 
-	//give the point coordinates by the screen
-	Point(int X, int Y) {
-		float x = (float)(2 * X / windowWidth - 1);
-		float y = (float)(1 - 2.0f * Y / windowHeight);
-		float z = sqrtf(x * x + y * y + 1.0f);
-		m_Coordinates = vec3(x, y, z);
-
-
-	}
-
-	//give a link do we need this?
 	void addNeighbour(Point* p) {
 		m_Neighbours.push_back(p);
 	}
@@ -421,7 +297,6 @@ public:
 
 
 	void setC(vec3 v) {
-		//itt is átírtam
 		float z = sqrtf(v.x * v.x + v.y * v.y + 1.0f);
 		if (z == 1.0f) {
 			v.x = 0;
@@ -441,12 +316,7 @@ public:
 
 
 	void forceOfOthers(Point* point) {
-		bool neighbour = isNeighbour(point);//false;
-		/*for (Point* p : m_Neighbours) {
-			if (p == point) {
-				neighbour = true;
-			}
-		}*/
+		bool neighbour = isNeighbour(point);
 		setVelocity(hVector(m_Coordinates, point->m_Coordinates, neighbour));
 		
 	}
@@ -455,43 +325,25 @@ public:
 		setVelocity(hGravity(m_Coordinates));
 	}
 
-	void hPrint() {
-		//printf("x : %f\ty : %f\tz : %f\n", m_Coordinates.x, m_Coordinates.y, m_Coordinates.z);
-	}
-
-	void hVprint() {
-		//printf("\n c : %f , v : %f\t %f\t %f\t \n", m_Velocity.cosd, m_Velocity.v.x, m_Velocity.v.y, m_Velocity.v.z);
-	}
-
-	void homogeneousPrint() {
-		vec3 p = homogeneousCoordinates();
-	//	printf("x : %f\ty : %f\tz : %f\n", p.x, p.y, p.z);
-	}
-
 	void move() {
-		//---------------------------------------------------------------------------
 		{
 			vec3 p = m_Coordinates * m_Velocity.cosd + m_Velocity.v;
 			Point* q = new Point(p.x, p.y);
-			//súrlódás -------------------------------------------------------------------------------------------beleírtam pluszba a sebességet csúzli effect ++
-			m_Velocity =/* m_Velocity +*/ hMirrorvt(m_Coordinates, q->m_Coordinates, 1.0f - g_Friction);
-			delete q; //bele kéne integrálni a plussz velocitit a cuccba
-		}
-		//---------------------------------------------------------------------------
+			m_Velocity = hMirrorvt(m_Coordinates, q->m_Coordinates, 1.0f - g_Friction);
+			delete q;
+		}	
 		vec3 p = hHalfWay(m_Coordinates, m_Coordinates * m_Velocity.cosd + m_Velocity.v);
-		Point* h = new Point(p.x, p.y);//------------------------------------------------
+		Point* h = new Point(p.x, p.y);
 		setC(hMirrorpt(m_Coordinates, h->m_Coordinates, 1.0f));
 		delete h;
 	}
 
-	//----------------------------------------------------------------------------------------ez baj lehet?
 	void setVelocity(velocity v) {
 		m_Velocity = m_Velocity + v;
 		vec3 p = m_Coordinates * m_Velocity.cosd + m_Velocity.v;
 		Point* q = new Point(p.x, p.y);
 		m_Velocity = hMirrorvt(m_Coordinates, q->m_Coordinates, 1.0f);
 		delete q;
-		//printf("\n c : %f , v : %f\t %f\t %f\t \n", m_Velocity.cosd, m_Velocity.v.x, m_Velocity.v.y, m_Velocity.v.z);
 	}
 
 	vec2 centerOfMass(Point* p) {
@@ -502,17 +354,13 @@ public:
 		else {
 		return vec2(-r.x, -r.y);
 		}
-
 	}
-
 };
 
 class Graph2 {
 public:
 	std::vector<Point*> m_Points;
 	std::vector<int> m_Links;
-	
-	
 
 	void init(int numberOfPoints, int numberOfLinks) {
 		for (int i = 0; i < numberOfPoints; i++) {
@@ -552,16 +400,13 @@ public:
 				j--;
 			}
 		}
-		//bHP();
-		//heuristicPlacement();
 	}
 
  	void heuristicPlacement(){
-		//sort();
 		if (g_Points > 5) {
 			for (int i = 0; i < 5; i++) {
-				float x = ((float)(rand() % 1000) /*- 500.0f*/) / 1000.0f;
-				float y = ((float)(rand() % 1000) /*- 500.0f*/) / 1000.0f;
+				float x = (float)(rand() % 1000)  / 1000.0f;
+				float y = (float)(rand() % 1000) / 1000.0f;
 				delete m_Points[i];
 				m_Points[i]= new Point(x, y);
 			}
@@ -571,73 +416,9 @@ public:
 				for (int j = i-1; j >= 0; j--) {
 					sum = sum + m_Points[j]->centerOfMass(m_Points[i]);
 				}
-				//azért szabad mert újraszámolom a zt szóval az sosem lesz 1 remálhetõleg
 				m_Points[i]->setC(vec3(sum.x/ (float)i, sum.y/ (float)i));
 			}		
 		}
-	}
-
-	void bHP() {
-		bool bad = true;
-		int score = 1000;
-		for (int i = 0; bad; i++) {
-			heuristicPlacement();
-			if(countIntersects() < score){
-				score = countIntersects();
-			}
-			if (score < 105) {
-				bad = false;
-			}
-		}
-
-	}
-
-	int countIntersects() {
-		int intersects = 0;
-		std::vector<line> lines;
-		vec3 p;
-		vec3 q;
-		for (int i = 0; i < m_Links.size() / 2; i++) {
-			p = m_Points[m_Links[2 * i]]->homogeneousCoordinates();
-			q = m_Points[m_Links[2 * i + 1]]->homogeneousCoordinates();
-			lines.push_back(line(q.x, q.y, p.x, p.y));
-		}
-		for (int i = 0; i < lines.size() - 1; i++) {
-			for (int j = i + 1; j < lines.size(); j++) {
-				if (lines[i].m != lines[j].m) {
-					if (intersect(lines[i], lines[j])) {
-						intersects++;
-					}
-				}
-
-			}
-		}
-		return intersects;
-	}
-
-	void sort() {
-		for (int i = 0; i < g_Points; i++) {
-			int maxn = i;
-			for (int j = i; j < g_Points; j++) {
-				if (m_Points[j]->m_Neighbours.size() > m_Points[maxn]->m_Neighbours.size()) {
-					maxn = j;
-				}
-			}
-			Point* temp = m_Points[i];
-			m_Points[i] = m_Points[maxn];
-			m_Points[maxn] = temp;
-		}
-	
-	}
-
-	std::vector<float>* getCoordinates(std::vector<float>* v) {
-		
-		for (int i = 0; i < m_Points.size(); i++) {
-			m_Points[i]->pointsInVector(v);
-			printf("[%d]\t", i);
-			m_Points[i]->hPrint();
-		}
-		return v;
 	}
 
 	std::vector<float>* getLinks(std::vector<float>* v) {
@@ -673,25 +454,19 @@ public:
 				}
 			}
 			m_Points[i]->forceOfOrigo();
-			//m_Points[i]->hVprint();
 		}
 
 		for (auto p : m_Points) {
 			p->move();
-		}
-		
+		}	
 	}
 
 	~Graph2() {
 		for (auto p : m_Points) {
 			delete p;
-		}
-		
+		}	
 	}
 
-
-
-	// OpenGL stuff ---------------------------------------------------------------
 	void drawTexture(float r, int smoothness) {
 		gpuProgram[1].Use();
 		glBindVertexArray(vao[1]);
@@ -725,15 +500,14 @@ public:
 						  0, 0, 1, 0,
 						  0, 0, 0, 1 };
 
-		int location = glGetUniformLocation(gpuProgram[0].getId(), "MVP");	// Get the GPU location of uniform variable MVP
-		glUniformMatrix4fv(location, 1, GL_TRUE, &MVPtransf[0][0]);	// Load a 4x4 row-major float matrix to the specified location
+		int location = glGetUniformLocation(gpuProgram[0].getId(), "MVP");	
+		glUniformMatrix4fv(location, 1, GL_TRUE, &MVPtransf[0][0]);	
 
 		glBufferData(GL_ARRAY_BUFFER, 
 			v.size() * sizeof(float), &v[0], GL_DYNAMIC_DRAW);
 		glEnableVertexAttribArray(0);  
 		glVertexAttribPointer(0,  2, GL_FLOAT, GL_FALSE, 0, NULL);
 		
-
 		glBindBuffer(GL_ARRAY_BUFFER, vbo[1]);
 		glBufferData(GL_ARRAY_BUFFER, vUV.size() * sizeof(float), &vUV[0], GL_STATIC_DRAW);	
 		glEnableVertexAttribArray(1);
@@ -752,8 +526,8 @@ public:
 		glEnableVertexAttribArray(0);  
 		glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, NULL);
 
-		float MVPtransf[4][4] = { 1, 0, 0, 0,    // MVP matrix, 
-								  0, 1, 0, 0,    // row-major!
+		float MVPtransf[4][4] = { 1, 0, 0, 0,    
+								  0, 1, 0, 0,    
 								  0, 0, 1, 0,
 								  0, 0, 0, 1 };
 
@@ -764,12 +538,9 @@ public:
 
 		location = glGetUniformLocation(gpuProgram[0].getId(), "color");
 		glUniform3f(location, 1.0f, 1.0f, 0.0f); 
+
 		getLinks(&v);
-
-		glBufferData(GL_ARRAY_BUFFER, 
-			v.size() * sizeof(float), &v[0], GL_DYNAMIC_DRAW);	
-
-		glPointSize(10.0f);
+		glBufferData(GL_ARRAY_BUFFER, v.size() * sizeof(float), &v[0], GL_DYNAMIC_DRAW);	
 		glDrawArrays(GL_LINES, 0, g_Links*2);
 	}
 
@@ -779,12 +550,10 @@ public:
 		glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
 		int location = glGetUniformLocation(gpuProgram[0].getId(), "color");
 		glUniform3f(location, 0.70f, 0.70f, 0.70f);
-
 		
 		for (Point* p : m_Points) {
 			std::vector<float> v;
 			
-
 			for (int i = 0; i < 20; i++) {
 				float fi = (i * 2 * M_PI / 20) + M_PI / 4.0f;
 				float x = p->m_Coordinates.x + 0.045 * cosf(fi);
@@ -793,15 +562,9 @@ public:
 				v.push_back(x / z);
 				v.push_back(y / z);
 			}
-		glBufferData(GL_ARRAY_BUFFER, 	// Copy to GPU target
-			v.size() * sizeof(float),  // # bytes
-			&v[0],	      	// address
-			GL_DYNAMIC_DRAW);	// we do not change later
-
-		
-		glPointSize(10.0f);
-		glBindVertexArray(vao[0]);  // Draw call
-		glDrawArrays(GL_TRIANGLE_FAN, 0 /*startIdx*/, 20 /*# Elements*/);
+		glBufferData(GL_ARRAY_BUFFER, v.size() * sizeof(float), &v[0],GL_DYNAMIC_DRAW);	
+		glBindVertexArray(vao[0]); 
+		glDrawArrays(GL_TRIANGLE_FAN, 0 , 20 );
 		}
 	}
 
@@ -810,18 +573,11 @@ public:
 		drawPoints();
 		drawTexture(0.04f, 5);
 	}
-
 };
-
-
-/// ---------------------------------------------------------------------------------------------
-
 
 Graph2 graph;
 
-// Initialization, create an OpenGL context
 void onInitialization() {
-	
 	glViewport(0, 0, windowWidth, windowHeight);
 
 	glGenVertexArrays(2, &vao[0]);
@@ -829,53 +585,39 @@ void onInitialization() {
 
 	graph.init(g_Points, g_Links);
 
-	// create program for the GPU
 	gpuProgram[0].create(vertexSource, fragmentSource, "outColor");
 	gpuProgram[1].create(vertexTextureSource, fragmentTextureSource, "outColor");
 	gpuProgram[0].Use();
 }
 
-// Window has become invalid: Redraw
 void onDisplay() {
-	glClearColor(0, 0, 0, 0);     // background color
-	glClear(GL_COLOR_BUFFER_BIT); // clear frame buffer
-
+	glClearColor(0, 0, 0, 0);    
+	glClear(GL_COLOR_BUFFER_BIT); 
 	graph.gDraw();
-	glutSwapBuffers(); // exchange buffers for double buffering
+	glutSwapBuffers(); 
 }
 
-// Key of ASCII code pressed
 void onKeyboard(unsigned char key, int pX, int pY) {
-	if (key == 'd') glutPostRedisplay();         // if d, invalidate display, i.e. redraw
-	if (key == 'a') { graph.sumVelocity(); glutPostRedisplay();}
-	if (key == 's') { graph.heuristicPlacement(); glutPostRedisplay(); }
-	if (key == 'c') { printf("Intersects : %d\n", graph.countIntersects()); }
 	if (key == ' ') { 
 		g_Moved = false;
 		g_RestartNeeded = true;
 	}
 }
 
-// Key of ASCII code released
-void onKeyboardUp(unsigned char key, int pX, int pY) {
-}
+void onKeyboardUp(unsigned char key, int pX, int pY) {}
 
-// Move mouse with key pressed
 void onMouseMotion(int pX, int pY) {	
-	float cX = 2.0f * pX / windowWidth - 1;	// flip y axis
+	float cX = 2.0f * pX / windowWidth - 1;	
 	float cY = 1.0f - 2.0f * pY / windowHeight;
 	g_to = point(cX, cY);
 	if (pressed && right) {
 		graph.gShift();
 		glutPostRedisplay();
 	}
-	/*printf("Mouse moved to (%3.2f, %3.2f)\n", cX, cY);*/
 }
 
-// Mouse click event
-void onMouse(int button, int state, int pX, int pY) { // pX, pY are the pixel coordinates of the cursor in the coordinate system of the operation system
-	// Convert to normalized device space
-	float cX = 2.0f * pX / windowWidth - 1;	// flip y axis
+void onMouse(int button, int state, int pX, int pY) { 	
+	float cX = 2.0f * pX / windowWidth - 1;	
 	float cY = 1.0f - 2.0f * pY / windowHeight;
 
 	char * buttonStat;
@@ -885,15 +627,14 @@ void onMouse(int button, int state, int pX, int pY) { // pX, pY are the pixel co
 	}
 
 	switch (button) {
-	case GLUT_LEFT_BUTTON:   /*printf("Left button %s at (%3.2f, %3.2f)\n", buttonStat, cX, cY);*/ break;
-	case GLUT_MIDDLE_BUTTON: /*printf("Middle button %s at (%3.2f, %3.2f)\n", buttonStat, cX, cY);*/  break;
-	case GLUT_RIGHT_BUTTON:  /*printf("Right button %s at (%3.2f, %3.2f)\n", buttonStat, cX, cY)*/; right = pressed; g_Moved = true; g_from = point(cX, cY); break;
+	case GLUT_LEFT_BUTTON:    break;
+	case GLUT_MIDDLE_BUTTON:   break;
+	case GLUT_RIGHT_BUTTON:  ; right = pressed; g_Moved = true; g_from = point(cX, cY); break;
 	}
 }
 
-// Idle event indicating that some time elapsed: do animation here
 void onIdle() {
-	long time = glutGet(GLUT_ELAPSED_TIME); // elapsed time since the start of the program
+	long time = glutGet(GLUT_ELAPSED_TIME); 
 	if (!g_Moved) {
 		if (g_RestartNeeded) {
 			graph.heuristicPlacement();
